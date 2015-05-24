@@ -23,6 +23,7 @@ import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.Stack;
 
 
 public class MainActivity extends ActionBarActivity {
@@ -113,38 +114,51 @@ public class MainActivity extends ActionBarActivity {
     }
 
 
+    int numBytes = 0;
+
     private class PlayAudio extends AsyncTask<Void, Integer, Void> {
         @Override
         protected Void doInBackground(Void... params) {
             isPlaying = true;
 
-            int bufferSize = (int)Math.pow(2,10)*200;
+            int bufferSize = (int)Math.pow(Math.pow(2,10),2);
             short[] audioData = new short[bufferSize / 4];
+            Stack<short[]> audioStack = new Stack<>();
 
             try {
                 DataInputStream dis = new DataInputStream(new BufferedInputStream(new FileInputStream(recordingFile)));
                 AudioTrack audioTrack = new AudioTrack(
                         AudioManager.STREAM_MUSIC, frequency,
-                        channelConfiguration, audioEncoding, bufferSize,
+                        channelConfiguration, audioEncoding, numBytes,
                         AudioTrack.MODE_STREAM);
-
-                audioTrack.play();
                 while (isPlaying && dis.available() > 0) {
-                    int i = 0; //audioData.length - 1;
-
+                    int i = audioData.length - 1;
+                    /*
                     while (dis.available() > 0 && i < audioData.length) {
                         audioData[i] = dis.readShort();
                         i++;
                     }
-                    /*
+                    */
+
                     while (dis.available() > 0 && i >= 0) {
                         audioData[i] = dis.readShort();
                         i--;
                     }
-                    */
-                    audioTrack.write(audioData, 0, audioData.length);
+
+                    audioStack.push(audioData);
+
+                    //audioTrack.write(audioData, 0, audioData.length);
                 }
                 dis.close();
+
+                audioTrack.play();
+                while (!audioStack.empty()) {
+                audioTrack.write(audioStack.peek(), 0, audioStack.pop().length);
+                }
+
+                audioTrack.stop();
+                dis=null;
+                audioTrack=null;
                 //isPlaying = false;
                 //playButton.setText("Play");
             } catch (Throwable t) {
@@ -154,7 +168,6 @@ public class MainActivity extends ActionBarActivity {
             return null;
         }
     }
-
 
     //http://www.java2s.com/Code/Android/Media/UsingAudioRecord.htm
     private class RecordAudio extends AsyncTask<Void, Integer, Void> {
@@ -182,6 +195,7 @@ public class MainActivity extends ActionBarActivity {
                     }
                     publishProgress(new Integer(r));
                     r++;
+                    numBytes += bufferSize;
                 }
                 audioRecord.stop();
                 dos.close();
